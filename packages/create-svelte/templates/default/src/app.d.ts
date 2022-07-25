@@ -1,4 +1,5 @@
 /// <reference types="@sveltejs/kit" />
+/// <reference types="../.svelte-kit/types/fetch" />
 
 // See https://kit.svelte.dev/docs/types#app
 // for information about these interfaces
