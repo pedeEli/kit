@@ -193,6 +193,7 @@ export interface LoadEvent<
 		input: Input,
 		init?: GenericRequestInit<Method>
 	): Promise<GenericResponse<JsonResponses, Input, Method>>;
+	fetch(info: RequestInfo, init?: RequestInit): Promise<Response>;
 	params: Params;
 	props: Props;
 	routeId: string | null;
