@@ -164,9 +164,11 @@ export async function dev(vite, vite_config, svelte_config) {
 
 	update_manifest();
 
-	for (const event of ['add', 'unlink']) {
+	for (const event of ['add', 'unlink', 'change']) {
 		vite.watcher.on(event, (file) => {
 			if (file.startsWith(svelte_config.kit.files.routes + path.sep)) {
+				if (event === 'change' && !file.endsWith('.ts'))
+					return
 				update_manifest();
 			}
 		});

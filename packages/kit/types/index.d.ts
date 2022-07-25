@@ -175,16 +175,24 @@ export interface HandleError {
 export interface Load<
 	Params extends Record<string, string> = Record<string, string>,
 	InputProps extends Record<string, any> = Record<string, any>,
-	OutputProps extends Record<string, any> = InputProps
+	OutputProps extends Record<string, any> = InputProps,
+	JsonResponses extends Record<string, Record<string, any>> = Record<string, Record<string, any>>
 > {
-	(event: LoadEvent<Params, InputProps>): MaybePromise<LoadOutput<OutputProps> | void>;
+	(event: LoadEvent<Params, InputProps, JsonResponses>): MaybePromise<LoadOutput<OutputProps> | void>;
 }
 
 export interface LoadEvent<
 	Params extends Record<string, string> = Record<string, string>,
-	Props extends Record<string, any> = Record<string, any>
+	Props extends Record<string, any> = Record<string, any>,
+	JsonResponses extends Record<string, Record<string, any>> = Record<string, Record<string, any>>
 > {
-	fetch(info: RequestInfo, init?: RequestInit): Promise<Response>;
+	fetch<
+		Input extends string = string,
+		Method extends string = "GET"
+	>(
+		input: Input,
+		init?: GenericRequestInit<Method>
+	): Promise<GenericResponse<JsonResponses, Input, Method>>;
 	params: Params;
 	props: Props;
 	routeId: string | null;
@@ -287,3 +295,18 @@ export interface SSRManifest {
 		matchers: () => Promise<Record<string, ParamMatcher>>;
 	};
 }
+
+
+export interface GenericResponse<
+	JsonResponses extends Record<string, Record<string, any>>,
+	Input extends string,
+	Method extends string
+> extends Response {
+    json(): Promise<JsonResponses[Input][Lowercase<Method>]>;
+}
+
+export interface GenericRequestInit<Method extends string> extends RequestInit {
+    method?: Method;
+}
+
+export type GenericJsonResponse = Record<string, Record<string, any>>;

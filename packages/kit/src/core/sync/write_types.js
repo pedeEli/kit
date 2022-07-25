@@ -1,11 +1,17 @@
 import { rimraf } from '../../utils/filesystem.js';
 import { parse_route_id } from '../../utils/routing.js';
 import { write } from './utils.js';
+import fs from 'fs';
+import path from 'path';
 
-/** @param {string} imports */
-const header = (imports) => `
+/**
+ * @param {string} imports
+ * @param {number} dots
+ */
+const header = (imports, dots) => `
 // this file is auto-generated
-import type { ${imports} } from '@sveltejs/kit';`;
+import type { ${imports} } from '@sveltejs/kit';
+import type { JsonResponses } from '${Array(dots).fill('..').join('/')}/fetch';`;
 
 /** @param {string} arg */
 const endpoint = (arg) => `
@@ -16,7 +22,7 @@ const page = (arg) => `
 export type Load<
 	InputProps extends Record<string, any> = Record<string, any>,
 	OutputProps extends Record<string, any> = InputProps
-> = GenericLoad<${arg}, InputProps, OutputProps>;`;
+> = GenericLoad<${arg}, InputProps, OutputProps, JsonResponses>;`;
 
 /**
  * @param {import('types').ValidatedConfig} config
@@ -24,6 +30,8 @@ export type Load<
  */
 export function write_types(config, manifest_data) {
 	rimraf(`${config.kit.outDir}/types`);
+
+	write_generic_fetch(config, manifest_data);
 
 	/** @type {Map<string, { params: string[], type: 'page' | 'endpoint' | 'both' }>} */
 	const shadow_types = new Map();
@@ -71,11 +79,56 @@ export function write_types(config, manifest_data) {
 			content.push(page(arg));
 		}
 
-		content.unshift(header(imports.join(', ')));
+		content.unshift(header(imports.join(', '), key.split('/').length));
 
 		const parts = (key || 'index').split('/');
 		parts.push('__types', /** @type {string} */ (parts.pop()));
 
 		write(`${config.kit.outDir}/types/${parts.join('/')}.d.ts`, content.join('\n').trim());
 	});
+}
+
+
+/**
+ * @param {string[]} types
+ */
+const generic_fetch = (types) => `
+// this file is auto-generated
+import type { GenericResponse, GenericRequestInit, GenericJsonResponse } from '@sveltejs/kit';
+
+export type JsonResponses = {
+${types.join('\n')}
+} & GenericJsonResponse;
+
+declare global {
+	export function fetch<
+		Input extends string = string,
+		Method extends string = "GET"
+	>(
+		input: Input,
+		init?: GenericRequestInit<Method>
+	): Promise<GenericResponse<JsonResponses, Input, Method>>;
+}`;
+
+/**
+ * @param {import('types').ValidatedConfig} config
+ * @param {import('types').ManifestData} manifest_data
+ */
+const write_generic_fetch = (config, manifest_data) => {
+	const endpoints = /** @type {import('types').EndpointData[]} */ (
+		manifest_data.routes.filter(({type}) => type === 'endpoint')
+	);
+	const fetch_types = endpoints.map(({file, id}) => {
+		const file_path = path.resolve(file);
+		const contents = fs.readFileSync(file_path, 'utf8');
+		const methods = /** @type {Array<import('types').HttpMethod>} */ (['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD']);
+		const method_types = methods.map(method => {
+			const regex = new RegExp(`export\\s+(type|interface)\\s+${method}Type`);
+			if (!regex.test(contents))
+				return `        ${method.toLowerCase()}: any;`;
+			return `        ${method.toLowerCase()}: import('../../${file.replace(/\.ts$/, '')}').${method}Type;`;
+		});
+		return `    '/${id}': {\n${method_types.join('\n')}\n    };`;
+	});
+	write(`${config.kit.outDir}/types/fetch.d.ts`, generic_fetch(fetch_types).trim());
 }
